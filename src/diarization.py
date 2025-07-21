@@ -1,15 +1,15 @@
 from typing import List, Tuple
 import os
 import logging
-
-# pyannote.audio imports
 from pyannote.audio import Pipeline
+import torch
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
 def diarize_audio(audio_path: str) -> List[Tuple[str, float, float]]:
     """
     Performs speaker diarization on the given audio file using pyannote.audio.
+    Uses CUDA if available, otherwise CPU.
 
     Args:
         audio_path (str): Path to the preprocessed WAV audio file.
@@ -24,6 +24,14 @@ def diarize_audio(audio_path: str) -> List[Tuple[str, float, float]]:
             return []
         logging.info("Loading pyannote.audio pipeline...")
         pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", use_auth_token=hf_token)
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+            pipeline.to(device)
+            logging.info("Using CUDA for diarization.")
+        else:
+            device = torch.device("cpu")
+            pipeline.to(device)
+            logging.info("Using CPU for diarization.")
         logging.info(f"Processing audio for diarization: {audio_path}")
         diarization = pipeline(audio_path)
         segments = []
