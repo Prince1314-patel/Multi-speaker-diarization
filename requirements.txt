@@ -1,0 +1,45 @@
+# Core dependencies
+python-dotenv
+requests
+numpy
+soundfile
+librosa
+pydub
+ffmpeg-python
+
+# Groq API
+# (Official client, but requests is used for direct API calls)
+groq
+
+# Speaker diarization
+
+pyannote.audio
+
+# Deep learning
+# (pyannote.audio requires torch and torchaudio)
+torch
+# torchaudio is required for some pyannote.audio features
+torchaudio
+
+# For progress bars and rich logging
+rich
+
+# For test discovery and running
+pytest
+
+# For compatibility with Hugging Face Hub
+huggingface-hub
+
+# For configuration
+omegaconf
+
+# For Lightning (used by pyannote.audio)
+lightning
+
+# For audio file reading (librosa fallback)
+audioread
+
+# For type hints and extensions
+typing-extensions
+
+streamlit
