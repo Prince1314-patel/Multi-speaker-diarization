@@ -4,10 +4,9 @@ import logging
 import requests
 import soundfile as sf
 import numpy as np
+import whisper
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
-
-GROQ_API_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 
 
 def slice_audio_segment(audio_path: str, start: float, end: float, out_path: str) -> bool:
@@ -35,50 +34,39 @@ def slice_audio_segment(audio_path: str, start: float, end: float, out_path: str
         return False
 
 
-def transcribe_segment(segment_path: str, api_key: str) -> Dict:
+def transcribe_segment(segment_path: str, model_name: str = "base") -> Dict:
     """
-    Sends an audio segment to the Groq Whisper API for transcription.
+    Transcribes an audio segment using the local OpenAI Whisper model.
 
     Args:
         segment_path (str): Path to the audio segment WAV file.
-        api_key (str): Groq API key.
+        model_name (str): Whisper model to use (e.g., 'base', 'small', 'medium', 'large').
 
     Returns:
         Dict: Transcription result with text and word-level timestamps.
     """
     try:
-        with open(segment_path, 'rb') as f:
-            files = {'file': (os.path.basename(segment_path), f, 'audio/wav')}
-            data = {
-                'model': 'whisper-large-v3',
-                'response_format': 'verbose_json',
-                'timestamp_granularities[]': ['word']
-            }
-            headers = {'Authorization': f'Bearer {api_key}'}
-            response = requests.post(GROQ_API_URL, files=files, data=data, headers=headers)
-            response.raise_for_status()
-            return response.json()
+        model = whisper.load_model(model_name)
+        result = model.transcribe(segment_path, word_timestamps=True, verbose=False)
+        return result
     except Exception as e:
-        logging.error(f"Groq API transcription error: {e}")
+        logging.error(f"Whisper transcription error: {e}")
         return {"error": str(e)}
 
 
-def transcribe_segments(audio_path: str, segments: List[Dict], temp_dir: str = "diarization/") -> List[Dict]:
+def transcribe_segments(audio_path: str, segments: List[Dict], temp_dir: str = "diarization/", model_name: str = "base") -> List[Dict]:
     """
-    Transcribes diarized audio segments using Groq Whisper API.
+    Transcribes diarized audio segments using the local OpenAI Whisper model.
 
     Args:
         audio_path (str): Path to the preprocessed WAV audio file.
         segments (List[Dict]): List of diarized segments with 'speaker', 'start', 'end'.
         temp_dir (str): Directory to store temporary segment files.
+        model_name (str): Whisper model to use.
 
     Returns:
         List[Dict]: List of transcribed segments with text and timestamps.
     """
-    api_key = os.getenv('GROQ_API_KEY')
-    if not api_key:
-        logging.error("Groq API key not found in environment variable 'GROQ_API_KEY'.")
-        return []
     results = []
     for idx, seg in enumerate(segments):
         speaker = seg['speaker'] if 'speaker' in seg else seg[0]
@@ -88,7 +76,7 @@ def transcribe_segments(audio_path: str, segments: List[Dict], temp_dir: str = "
         if not slice_audio_segment(audio_path, start, end, seg_path):
             continue
         logging.info(f"Transcribing segment {idx} ({speaker}): {start}-{end}s")
-        result = transcribe_segment(seg_path, api_key)
+        result = transcribe_segment(seg_path, model_name)
         result.update({'speaker': speaker, 'start': start, 'end': end})
         results.append(result)
     return results 

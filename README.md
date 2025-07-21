@@ -1,6 +1,6 @@
 # Multi-Speaker Meeting Transcription System
 
-A robust, scalable system for transcribing meetings with multiple speakers, supporting major audio formats (WAV, MP3, etc.), using Groq Whisper API for transcription and pyannote.audio for speaker diarization.
+A robust, scalable system for transcribing meetings with multiple speakers, supporting major audio formats (WAV, MP3, etc.), using local OpenAI Whisper for transcription and pyannote.audio for speaker diarization.
 
 ## Features
 - Accepts WAV, MP3, and other major audio formats
@@ -10,8 +10,8 @@ A robust, scalable system for transcribing meetings with multiple speakers, supp
 
 ## Requirements
 - Windows 10/11, Python 3.11+
-- Internet connection for GroqCloud transcription
-- Groq API key and Hugging Face token
+- openai-whisper (local transcription)
+- Hugging Face token (for pyannote.audio)
 
 ## Getting Started
 
@@ -38,18 +38,15 @@ pip install -r requirements.txt
 ### 4. Set Up Environment Variables
 Create a `.env` file or set the following environment variables in your shell:
 
-- `GROQ_API_KEY` — Your Groq Whisper API key
 - `HUGGINGFACE_TOKEN` — Your Hugging Face access token (for pyannote.audio)
 
 Example for Windows PowerShell:
 ```powershell
-$env:GROQ_API_KEY="your-groq-api-key"
 $env:HUGGINGFACE_TOKEN="your-huggingface-token"
 ```
 
 Example for .env file:
 ```
-GROQ_API_KEY=your-groq-api-key
 HUGGINGFACE_TOKEN=your-huggingface-token
 ```
 
@@ -65,6 +62,9 @@ run_pipeline('audio_inputs/your_audio_file.mp3', 'transcripts/')
 ```
 
 Or create a script to automate the process.
+
+## Transcription Details
+This project now uses the local [OpenAI Whisper](https://github.com/openai/whisper) model for all transcription tasks. You can select the model size (e.g., 'base', 'small', 'medium', 'large') in your code. No internet connection or API key is required for transcription, but a compatible GPU is recommended for faster processing.
 
 ## Documentation Policy
 All documentation, including this README, will be updated automatically with any new feature, change, or modification to the application.

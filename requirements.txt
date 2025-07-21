@@ -7,9 +7,8 @@ librosa
 pydub
 ffmpeg-python
 
-# Groq API
-# (Official client, but requests is used for direct API calls)
-groq
+# Whisper (local transcription)
+openai-whisper
 
 # Speaker diarization
 
