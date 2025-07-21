@@ -1,38 +1,38 @@
 # Project To-Do List
 
 ## 1. Environment Setup
-- [ ] Install Python 3.11 (Windows 10/11, 64-bit)
-- [ ] Create and activate a virtual environment
-- [ ] Install dependencies: `groq`, `pyannote.audio`, `soundfile`, `librosa`, etc.
-- [ ] Set up Groq API key and Hugging Face token securely
+- [x] Install Python 3.11 (Windows 10/11, 64-bit)
+- [x] Create and activate a virtual environment
+- [x] Install dependencies: `groq`, `pyannote.audio`, `soundfile`, `librosa`, etc.
+- [x] Set up Groq API key and Hugging Face token securely
 
 ## 2. Audio Preprocessing
-- [ ] Normalize audio files to mono, 16kHz
-- [ ] Validate input file format and length
+- [x] Normalize audio files to mono, 16kHz
+- [x] Validate input file format and length
 
 ## 3. Speaker Diarization
-- [ ] Integrate `pyannote.audio` for speaker segmentation
-- [ ] Generate (speaker label, start time, end time) segments
+- [x] Integrate `pyannote.audio` for speaker segmentation
+- [x] Generate (speaker label, start time, end time) segments
 
 ## 4. Speech Transcription
-- [ ] Slice audio by diarized segments
-- [ ] Transcribe each segment using Groq Whisper API
-- [ ] Retrieve text and word-level timestamps
+- [x] Slice audio by diarized segments
+- [x] Transcribe each segment using Groq Whisper API
+- [x] Retrieve text and word-level timestamps
 
 ## 5. Result Aggregation
-- [ ] Combine transcripts by time and speaker
-- [ ] Build structured data: speaker label, start, end, transcript
+- [x] Combine transcripts by time and speaker
+- [x] Build structured data: speaker label, start, end, transcript
 
 ## 6. Output and Export
-- [ ] Format results as CSV, JSON, and readable text transcript
+- [x] Format results as CSV, JSON, and readable text transcript
 - [ ] (Optional) Export SRT/VTT subtitle tracks
 
 ## 7. Error Handling & Logging
-- [ ] Implement status/error logs for API calls, audio slicing, and diarization
+- [x] Implement status/error logs for API calls, audio slicing, and diarization
 
 ## 8. Security
-- [ ] Ensure API keys/tokens are never stored in code or public repos
-- [ ] Document secure token setup for users
+- [x] Ensure API keys/tokens are never stored in code or public repos
+- [x] Document secure token setup for users
 
 ## 9. Testing and Validation
 - [ ] Use test audio files to validate system accuracy
@@ -45,6 +45,9 @@
 - [ ] Develop UI/dashboard for uploads and result browsing
 
 ---
+
+### Pipeline Orchestration
+- [x] Implemented main pipeline orchestration in `src/pipeline.py` to coordinate preprocessing, diarization, transcription, aggregation, and export with robust logging and error handling.
 
 ### Reference: File Structure
 - Organize code and data as described in `file_structure.md` (audio_inputs/, diarization/, transcripts/, src/, tests/, etc.)
