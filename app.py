@@ -27,7 +27,7 @@ if uploaded_file is not None:
     else:
         wav_path = out
         # Diarization
-        segments = diarization.diarize_audio(wav_path)
+        segments = diarization.diarize_audio_hybrid(wav_path)
         if not segments:
             st.error("Speaker diarization failed or found no speakers.")
         else:

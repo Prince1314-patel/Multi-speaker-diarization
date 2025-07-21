@@ -66,6 +66,26 @@ Or create a script to automate the process.
 ## Transcription Details
 This project now uses the local [OpenAI Whisper](https://github.com/openai/whisper) model for all transcription tasks. You can select the model size (e.g., 'base', 'small', 'medium', 'large') in your code. No internet connection or API key is required for transcription, but a compatible GPU is recommended for faster processing.
 
+## Hybrid Diarization Workflow (WhisperX + pyannote)
+
+This project now uses a hybrid diarization approach:
+
+1. **Initial Diarization with WhisperX**: Fast, accurate transcription and speaker segmentation using OpenAI WhisperX.
+2. **Refinement with pyannote.audio**: Further refines speaker segments using pyannote's advanced diarization pipeline.
+
+### Requirements
+- `whisperx` (latest)
+- `pyannote.audio` (latest, installed as a dependency of whisperx)
+- Hugging Face account and access token (set as `HUGGINGFACE_TOKEN` environment variable)
+
+### Usage
+- The pipeline and app will automatically use the hybrid workflow for diarization.
+- No code changes are needed for users; just ensure dependencies are installed and the Hugging Face token is set.
+
+### Notes
+- You can adjust the workflow or fallback to either method by editing `src/diarization.py`.
+- For best results, use high-quality audio and ensure preprocessing completes successfully.
+
 ## Documentation Policy
 All documentation, including this README, will be updated automatically with any new feature, change, or modification to the application.
 

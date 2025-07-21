@@ -42,3 +42,5 @@ audioread
 typing-extensions
 
 streamlit
+
+whisperx

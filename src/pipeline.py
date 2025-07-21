@@ -2,7 +2,7 @@ import os
 import json
 import csv
 from src.preprocess import preprocess_audio
-from src.diarization import diarize_audio
+from src.diarization import diarize_audio_hybrid
 from src.transcribe import transcribe_segments
 import logging
 
@@ -28,7 +28,7 @@ def run_pipeline(input_audio_path: str, output_dir: str):
         return
     # Step 2: Diarization
     logging.info("Running diarization...")
-    diarization_segments = diarize_audio(processed_audio)
+    diarization_segments = diarize_audio_hybrid(processed_audio)
     if not diarization_segments:
         logging.error("Diarization failed or returned no segments.")
         return
