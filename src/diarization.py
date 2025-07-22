@@ -59,29 +59,19 @@ def diarize_audio_hybrid(audio_path: str, device: str = None, model_name: str = 
     try:
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
-        logging.info(f"Running WhisperX diarization on {device}...")
+        logging.info(f"Running WhisperX transcription on {device}...")
         batch_size = 16
         compute_type = "float16" if device == "cuda" else "float32"
         model = whisperx.load_model(model_name, device, compute_type=compute_type)
         result = model.transcribe(audio_path, batch_size=batch_size)
-        # Diarization (updated API)
-        diarize_segments = whisperx.diarize(
-            audio=audio_path,
-            asr_results=result,
-            device=device,
-            min_speakers=None,
-            max_speakers=None,
-            hf_token=os.getenv('HUGGINGFACE_TOKEN')
-        )
-        whisperx_segments = []
-        for seg in diarize_segments["segments"]:
-            whisperx_segments.append((seg["speaker"], seg["start"], seg["end"]))
-        logging.info(f"WhisperX diarization found {len(whisperx_segments)} segments. Refining with pyannote...")
+        # NOTE: WhisperX diarization is not available in the current API. Only transcription and word-level timestamps are available.
+        # Optionally, you can extract word-level timestamps from result["segments"] here.
+        logging.info(f"WhisperX transcription complete. Refining with pyannote...")
         # 2. Refine with pyannote
         hf_token = os.getenv('HUGGINGFACE_TOKEN')
         if not hf_token:
             logging.error("Hugging Face token not found in environment variable 'HUGGINGFACE_TOKEN'.")
-            return whisperx_segments
+            return []
         pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", use_auth_token=hf_token)
         pipeline.to(torch.device(device))
         diarization = pipeline(audio_path)
