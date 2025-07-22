@@ -44,3 +44,7 @@ typing-extensions
 streamlit
 
 whisperx
+
+# For diarization and transcription evaluation
+pyannote.metrics
+jiwer

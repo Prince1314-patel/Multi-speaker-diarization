@@ -86,6 +86,26 @@ This project now uses a hybrid diarization approach:
 - You can adjust the workflow or fallback to either method by editing `src/diarization.py`.
 - For best results, use high-quality audio and ensure preprocessing completes successfully.
 
+## Evaluation Scripts
+
+To quantitatively assess diarization and transcription quality, use the evaluation scripts in the `evaluation/` directory:
+
+### Diarization Error Rate (DER)
+- **Script:** `evaluation/evaluate_der.py`
+- **Usage:**
+  ```bash
+  python evaluation/evaluate_der.py --reference reference.rttm --hypothesis hypothesis.rttm
+  ```
+- **Description:** Compares your diarization output (RTTM format) to a ground-truth RTTM and prints DER and error breakdown.
+
+### Word Error Rate (WER)
+- **Script:** `evaluation/evaluate_wer.py`
+- **Usage:**
+  ```bash
+  python evaluation/evaluate_wer.py --reference reference.txt --hypothesis hypothesis.txt
+  ```
+- **Description:** Compares your transcript to a ground-truth transcript and prints WER and error details.
+
 ## Documentation Policy
 All documentation, including this README, will be updated automatically with any new feature, change, or modification to the application.
 
