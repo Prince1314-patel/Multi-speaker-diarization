@@ -6,45 +6,12 @@ soundfile
 librosa
 pydub
 ffmpeg-python
-
-# Whisper (local transcription)
-openai-whisper
-
-# Speaker diarization
-
-pyannote.audio
-
-# Deep learning
-# (pyannote.audio requires torch and torchaudio)
-torch
-# torchaudio is required for some pyannote.audio features
-torchaudio
-
-# For progress bars and rich logging
-rich
-
-# For test discovery and running
-pytest
-
-# For compatibility with Hugging Face Hub
-huggingface-hub
-
-# For configuration
 omegaconf
-
-# For Lightning (used by pyannote.audio)
-lightning
-
-# For audio file reading (librosa fallback)
+nemo_toolkit[asr]
+torch
+rich
+pytest
 audioread
-
-# For type hints and extensions
 typing-extensions
-
 streamlit
-
-whisperx
-
-# For diarization and transcription evaluation
-pyannote.metrics
 jiwer

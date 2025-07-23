@@ -2,7 +2,7 @@ import os
 import json
 import csv
 from src.preprocess import preprocess_audio
-from src.diarization import diarize_audio_hybrid
+from src.diarization import diarize_audio_nemo
 from src.transcribe import transcribe_segments
 import logging
 
@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(mes
 
 def run_pipeline(input_audio_path: str, output_dir: str):
     """
-    Runs the full diarization and transcription pipeline.
+    Runs the full diarization and transcription pipeline using NVIDIA NeMo for diarization.
 
     Args:
         input_audio_path (str): Path to the user-supplied audio file.
@@ -26,9 +26,9 @@ def run_pipeline(input_audio_path: str, output_dir: str):
     if not success:
         logging.error(f"Preprocessing failed: {processed_audio}")
         return
-    # Step 2: Diarization
-    logging.info("Running diarization...")
-    diarization_segments = diarize_audio_hybrid(processed_audio)
+    # Step 2: Diarization (NeMo only)
+    logging.info("Running diarization using NVIDIA NeMo ...")
+    diarization_segments = diarize_audio_nemo(processed_audio)
     if not diarization_segments:
         logging.error("Diarization failed or returned no segments.")
         return
