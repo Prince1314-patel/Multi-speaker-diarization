@@ -6,16 +6,19 @@ import torch
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
-def diarize_audio(audio_path: str) -> List[Tuple[str, float, float]]:
+def diarize_audio(audio_path: str, window_size: float = 5.0, step_size: float = 0.5) -> List[Tuple[str, float, float, bool]]:
     """
     Performs speaker diarization on the given audio file using pyannote.audio.
-    Uses CUDA if available, otherwise CPU.
+    Uses CUDA if available, otherwise CPU. Implements overlapping window processing
+    for better handling of overlapped speech.
 
     Args:
         audio_path (str): Path to the preprocessed WAV audio file.
+        window_size (float): Size of the processing window in seconds (default: 5.0)
+        step_size (float): Step size between windows in seconds (default: 0.5)
 
     Returns:
-        List[Tuple[str, float, float]]: List of (speaker_label, start_time, end_time) segments.
+        List[Tuple[str, float, float, bool]]: List of (speaker_label, start_time, end_time, is_overlap) segments.
     """
     try:
         hf_token = os.getenv('HUGGINGFACE_TOKEN')
@@ -33,11 +36,31 @@ def diarize_audio(audio_path: str) -> List[Tuple[str, float, float]]:
             pipeline.to(device)
             logging.info("Using CPU for diarization.")
         logging.info(f"Processing audio for diarization: {audio_path}")
-        diarization = pipeline(audio_path)
+        
+        # Apply diarization with overlapping windows
+        diarization = pipeline(audio_path, segmentation={"window": window_size, "step": step_size})
+        
+        # Process segments and detect overlaps
         segments = []
+        timeline = diarization.get_timeline()
+        
+        # Create a timeline of all segments to detect overlaps
         for turn, _, speaker in diarization.itertracks(yield_label=True):
-            segments.append((speaker, turn.start, turn.end))
-        logging.info(f"Diarization complete. Found {len(segments)} segments.")
+            # Check for overlapping segments
+            overlapping = False
+            current_segment = timeline.crop(turn.start, turn.end)
+            
+            # If the segment overlaps with any other segment
+            if len(current_segment) > 1:
+                overlapping = True
+                logging.info(f"Detected overlap at {turn.start:.2f}-{turn.end:.2f}")
+            
+            segments.append((speaker, turn.start, turn.end, overlapping))
+            
+        # Sort segments by start time
+        segments.sort(key=lambda x: x[1])
+        
+        logging.info(f"Diarization complete. Found {len(segments)} segments, including overlaps.")
         return segments
     except Exception as e:
         logging.error(f"Error during diarization: {e}")
