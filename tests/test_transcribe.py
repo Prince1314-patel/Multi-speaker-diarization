@@ -1,31 +1,59 @@
-import unittest
+import pytest
 import os
-from src import transcribe
+import numpy as np
+import soundfile as sf
+from src.transcribe import transcribe_with_whisperx
 
-class TestTranscribe(unittest.TestCase):
+@pytest.fixture(scope="module")
+def dummy_audio_file(tmp_path_factory):
     """
-    Unit tests for transcription functions using local OpenAI Whisper model.
-    Note: This test requires the openai-whisper package and a compatible local model.
+    Creates a dummy audio file for testing.
     """
-    def setUp(self):
-        self.sample_wav = 'audio_inputs/harvard-sample-audio.wav'
-        # Use a short segment for testing (first 2 seconds)
-        self.segments = [
-            {'speaker': 'SPEAKER_0', 'start': 0.0, 'end': 2.0}
-        ]
-        self.temp_dir = 'diarization/'
-        self.model_name = 'base'  # or 'small', 'medium', 'large' as available
+    file_path = tmp_path_factory.mktemp("data") / "dummy_audio.wav"
+    samplerate = 16000
+    duration = 1  # seconds
+    frequency = 440  # Hz
+    t = np.linspace(0., duration, int(samplerate * duration), endpoint=False)
+    data = 0.5 * np.sin(2. * np.pi * frequency * t)
+    sf.write(file_path, data.astype(np.float32), samplerate)
+    return str(file_path)
 
-    def test_transcribe_segments(self):
-        """Test transcription of a short audio segment returns expected structure using local Whisper."""
-        results = transcribe.transcribe_segments(self.sample_wav, self.segments, self.temp_dir, self.model_name)
-        self.assertIsInstance(results, list)
-        self.assertTrue(len(results) > 0, "No transcription results returned.")
-        for result in results:
-            self.assertIn('speaker', result)
-            self.assertIn('start', result)
-            self.assertIn('end', result)
-            self.assertTrue('text' in result or 'error' in result)
+def test_transcribe_with_whisperx_basic(dummy_audio_file):
+    """
+    Tests the basic functionality of transcribe_with_whisperx.
+    """
+    # Dummy diarization data (simplified for testing)
+    diarization_data = [
+        {"speaker": "SPEAKER_00", "start": 0.0, "end": 0.5},
+        {"speaker": "SPEAKER_01", "start": 0.6, "end": 1.0},
+    ]
 
-if __name__ == '__main__':
-    unittest.main() 
+    # Call the transcription function
+    # Note: This test will attempt to download WhisperX models if not cached.
+    # For actual unit tests, consider mocking whisperx.load_model and its dependencies.
+    transcribed_segments = transcribe_with_whisperx(
+        audio_path=dummy_audio_file,
+        diarization=diarization_data,
+        model_name="base",  # Use a slightly larger model
+        device="cpu",       # Use CPU for testing to avoid GPU dependency
+        batch_size=1,
+        compute_type="int8" # Use int8 for faster testing
+    )
+
+    # Assertions
+    assert isinstance(transcribed_segments, list)
+    assert len(transcribed_segments) > 0, "No segments transcribed"
+
+    for segment in transcribed_segments:
+        assert "speaker" in segment
+        assert "start" in segment
+        assert "end" in segment
+        assert "text" in segment
+        assert "words" in segment
+        assert isinstance(segment["words"], list)
+        assert len(segment["words"]) > 0, "No words found in segment"
+
+        for word_info in segment["words"]:
+            assert "word" in word_info
+            assert "start" in word_info
+            assert "end" in word_info

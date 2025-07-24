@@ -4,13 +4,12 @@ import logging
 import numpy as np
 from pyannote.audio import Pipeline
 import torch
-from src.overlap import analyze_overlap, merge_overlapping_segments
+from src.overlap import OverlapDetector
 from torch.cuda import empty_cache
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
-def diarize_audio(audio_path: str, window_size: float = 5.0, step_size: float = 0.5, 
-                min_overlap_duration: float = 0.2) -> List[Dict[str, any]]:
+def diarize_audio(audio_path: str, min_overlap_duration: float = 0.2) -> List[Dict[str, any]]:
     """
     Performs speaker diarization on the given audio file using pyannote.audio.
     Uses CUDA if available, otherwise CPU. Implements advanced overlapping window processing
@@ -18,8 +17,6 @@ def diarize_audio(audio_path: str, window_size: float = 5.0, step_size: float = 
 
     Args:
         audio_path (str): Path to the preprocessed WAV audio file.
-        window_size (float): Size of the processing window in seconds (default: 5.0)
-        step_size (float): Step size between windows in seconds (default: 0.5)
         min_overlap_duration (float): Minimum duration to consider as overlap (default: 0.2)
 
     Returns:
@@ -49,8 +46,7 @@ def diarize_audio(audio_path: str, window_size: float = 5.0, step_size: float = 
             logging.info("Using CPU for diarization.")
         logging.info(f"Processing audio for diarization: {audio_path}")
         
-        # Apply diarization with overlapping windows
-        diarization = pipeline(audio_path, segmentation={"window": window_size, "step": step_size})
+        diarization = pipeline(audio_path)
         
         # Process segments and detect overlaps
         segments = []
@@ -72,13 +68,29 @@ def diarize_audio(audio_path: str, window_size: float = 5.0, step_size: float = 
             empty_cache()
             
         # Analyze overlaps using the overlap detection module
-        processed_segments = analyze_overlap(
-            raw_segments,
-            min_duration=min_overlap_duration
-        )
+        overlap_detector = OverlapDetector()
+        if overlap_detector.initialize(hf_token):
+            overlap_regions = overlap_detector.detect_overlaps(audio_path)
+            # Merge diarization with overlaps
+            enhanced_segments = overlap_detector.merge_with_diarization(
+                [(seg['speaker'], seg['start'], seg['end']) for seg in raw_segments],
+                overlap_regions
+            )
+            # Convert back to list of dicts
+            processed_segments = [
+                {
+                    'speaker': speaker,
+                    'start': start,
+                    'end': end,
+                    'is_overlap': is_overlap,
+                    'overlap_with': []  # This part needs to be implemented if needed
+                }
+                for speaker, start, end, is_overlap in enhanced_segments
+            ]
+        else:
+            processed_segments = raw_segments
         
-        # Merge overlapping segments that belong to the same speaker
-        final_segments = merge_overlapping_segments(processed_segments)
+        final_segments = processed_segments
         
         # Sort segments by start time
         final_segments.sort(key=lambda x: x['start'])
