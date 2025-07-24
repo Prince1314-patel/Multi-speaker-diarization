@@ -150,3 +150,6 @@ tests/__pycache__/
 *.key
 *.pem
 *.env
+
+
+reference_docs/
