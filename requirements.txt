@@ -1,44 +1,36 @@
 # Core dependencies
-python-dotenv
-requests
-numpy
-soundfile
-librosa
-pydub
-ffmpeg-python
+python-dotenv>=0.19.0
+requests>=2.26.0
+numpy>=1.21.0
+soundfile>=0.10.3
+librosa>=0.9.0
+pydub>=0.25.1
+ffmpeg-python>=0.2.0
 
-# Whisper (local transcription)
-openai-whisper
+# Audio Processing and Transcription
+whisperx>=3.0.0
+faster-whisper>=0.9.0
+openai-whisper>=20231117
+ctranslate2>=3.24.0
 
-# Speaker diarization
+# Speaker Diarization
+pyannote.audio>=3.1.0
 
-pyannote.audio
+# Deep Learning Dependencies
+torch>=2.2.0
+torchaudio>=2.2.0
+lightning>=2.1.0
 
-# Deep learning
-# (pyannote.audio requires torch and torchaudio)
-torch
-# torchaudio is required for some pyannote.audio features
-torchaudio
+# Data Processing
+intervaltree>=3.1.0
 
-# For progress bars and rich logging
-rich
+# Utils and Logging
+rich>=10.16.0
+pytest>=7.0.0
+huggingface-hub>=0.19.0
+omegaconf>=2.3.0
+audioread>=3.0.0
+typing-extensions>=4.5.0
 
-# For test discovery and running
-pytest
-
-# For compatibility with Hugging Face Hub
-huggingface-hub
-
-# For configuration
-omegaconf
-
-# For Lightning (used by pyannote.audio)
-lightning
-
-# For audio file reading (librosa fallback)
-audioread
-
-# For type hints and extensions
-typing-extensions
-
-streamlit
+# UI
+streamlit>=1.24.0

@@ -23,6 +23,16 @@ var/
 .installed.cfg
 *.egg
 
+# Project specific
+data/raw_audio/*
+data/vad_chunks/*
+data/diar_rttm/*
+data/trans_segments/*
+!data/raw_audio/.gitkeep
+!data/vad_chunks/.gitkeep
+!data/diar_rttm/.gitkeep
+!data/trans_segments/.gitkeep
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
