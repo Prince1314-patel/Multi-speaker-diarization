@@ -1,39 +1,33 @@
 # Core dependencies
-python-dotenv>=0.19.0
-requests>=2.26.0
-numpy>=1.21.0
-soundfile>=0.10.3
-librosa>=0.9.0
-pydub>=0.25.1
-ffmpeg-python>=0.2.0
+python-dotenv
+requests
+numpy~=1.26.4
+soundfile
+librosa
+pydub
+ffmpeg-python
 
 # Audio Processing and Transcription
-whisperx==3.3.1
-faster-whisper==1.0.1
-openai-whisper==20231117
-ctranslate2==3.24.0
+whisperx
+faster-whisper
+openai-whisper
 
 # Speaker Diarization
-pyannote.audio==3.3.2
-
-# Deep Learning Dependencies
-torch==2.2.0+cu118         # CUDA 11.8 build matching PyTorch 2.2.0
-torchaudio==2.2.0+cu118
-lightning==2.2.1           # Compatible with Pyannote-Audio 3.3.2
+pyannote.audio
 
 # ONNX Runtime for GPU acceleration
-onnxruntime-gpu==1.17.1
+onnxruntime-gpu
 
 # Data Processing
-intervaltree>=3.1.0
+intervaltree
 
 # Utils and Logging
-rich>=10.16.0
-pytest>=7.0.0
-huggingface-hub>=0.19.0
-omegaconf>=2.3.0
-audioread>=3.0.0
-typing-extensions>=4.5.0
+rich
+pytest
+huggingface-hub
+omegaconf
+audioread
+typing-extensions
 
 # UI
-streamlit>=1.24.0
+streamlit
