@@ -5,10 +5,13 @@ This module provides functionality to detect regions of overlapped speech in aud
 
 from typing import List, Tuple
 import os
+from dotenv import load_dotenv
 import logging
 import torch
 from pyannote.audio import Pipeline
 from pyannote.core import Segment, Timeline
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
@@ -33,10 +36,14 @@ class OverlapDetector:
         Returns:
             bool: True if initialization successful, False otherwise
         """
+        auth_token = os.getenv("HUGGINGFACE_TOKEN")
+        if not auth_token:
+            logging.error("HUGGINGFACE_TOKEN environment variable not set")
+            return False
         try:
             self.pipeline = Pipeline.from_pretrained(
                 "pyannote/overlapped-speech-detection",
-                use_auth_token=auth_token
+                use_auth_token=auth_token,
             ).to(self.device)
             return True
         except Exception as e:

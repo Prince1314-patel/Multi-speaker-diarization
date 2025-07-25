@@ -3,6 +3,7 @@ import os
 import tempfile
 from src import preprocess, diarization, transcribe
 from dotenv import load_dotenv
+import torch
 
 load_dotenv()
 
@@ -31,13 +32,25 @@ if uploaded_file is not None:
         if not segments:
             st.error("Speaker diarization failed or found no speakers.")
         else:
-            # Convert segments to dicts for transcription
-            seg_dicts = [
-                {'speaker': s, 'start': float(start), 'end': float(end)}
-                for s, start, end in segments
-            ]
+            # Extract required fields from segments for transcription
+            try:
+                seg_dicts = [
+                    {
+                        'speaker': seg.get('speaker', 'Unknown'),
+                        'start': float(seg.get('start', 0)),
+                        'end': float(seg.get('end', 0))
+                    }
+                    for seg in segments
+                ]
+            except (ValueError, TypeError) as e:
+                st.error(f"Invalid segment data format: {e}")
+                seg_dicts = []
             # Transcription
-            results = transcribe.transcribe_segments(wav_path, seg_dicts, tempfile.gettempdir())
+            results = transcribe.transcribe_with_whisperx(
+                audio_path=wav_path,
+                diarization=seg_dicts,
+                device="cuda" if torch.cuda.is_available() else "cpu"
+            )
             if not results:
                 st.error("Transcription failed.")
             else:

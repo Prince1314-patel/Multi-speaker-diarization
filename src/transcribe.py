@@ -2,7 +2,9 @@ import whisperx
 import logging
 from typing import List, Dict
 import torch
-from pyannote.core import Segment, Annotation
+# Remove pyannote imports if they are not used elsewhere, or keep them if they are.
+# from pyannote.core import Segment, Annotation
+import pandas as pd
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
@@ -48,9 +50,7 @@ def transcribe_with_whisperx(
         aligned_result = whisperx.align(result["segments"], model_a, metadata, audio, device, return_char_alignments=False)
         logging.info(f"Alignment result: {aligned_result}")
 
-        # ---- START OF FIX ----
-        # Before assigning speakers, filter out segments that have no words.
-        # This prevents crashing the 'assign_word_speakers' function on empty segments.
+        # Filter out segments that have no words.
         segments_with_words = [
             segment for segment in aligned_result["segments"] if 'words' in segment and len(segment['words']) > 0
         ]
@@ -59,16 +59,24 @@ def transcribe_with_whisperx(
             return []
         
         aligned_result["segments"] = segments_with_words
+
+        # ---- START OF FIX ----
+        # 2. CONVERT DIARIZATION LIST TO A PANDAS DATAFRAME
+        # The assign_word_speakers function expects a DataFrame with 'speaker', 'start', and 'end' columns.
+        if not diarization:
+            logging.warning("Diarization data is empty. Cannot assign speakers.")
+            # If you want to return the transcription without speaker labels, you can do that here.
+            # For now, we create an empty DataFrame to avoid errors.
+            diarize_df = pd.DataFrame(columns=['speaker', 'start', 'end'])
+        else:
+            diarize_df = pd.DataFrame(diarization)
+            # Ensure required columns exist
+            if not all(col in diarize_df.columns for col in ['speaker', 'start', 'end']):
+                raise ValueError("Diarization DataFrame must contain 'speaker', 'start', and 'end' columns.")
+
+        # 5. Assign words to speakers using the diarization DataFrame
+        final_result = whisperx.assign_word_speakers(diarize_df, aligned_result)
         # ---- END OF FIX ----
-
-        # Convert diarization list of dicts to pyannote.core.Annotation
-        diarization_annotation = Annotation()
-        for segment_info in diarization:
-            diarization_annotation[Segment(segment_info['start'], segment_info['end'])] = segment_info['speaker']
-
-        # 5. Assign words to speakers using the provided diarization
-        # 5. Assign words to speakers using the provided diarization
-        final_result = whisperx.assign_word_speakers(diarization_annotation, aligned_result)
 
         # Reformat the output to match the expected structure
         logging.info("Reformatting output...")
