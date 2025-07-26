@@ -28,7 +28,7 @@ A robust and scalable system for transcribing meetings involving multiple speake
 ```bash
 git clone https://github.com/your-username/multiple-speaker-diarization.git
 cd multiple-speaker-diarization
-````
+```
 
 ### 2. Create and Activate a Virtual Environment
 
@@ -81,17 +81,28 @@ Refer to [`reference_docs/file_structure.md`](reference_docs/file_structure.md) 
 
 ---
 
-## ▶️ Running the Pipeline
+## ▶️ Running the App (Streamlit Interface)
 
-Execute the pipeline by importing and running the main function in your Python script:
+After setting up everything, you can launch the app using Streamlit:
+
+```bash
+cd multiple-speaker-diarization
+streamlit run app.py
+```
+
+This will start the Streamlit web application in your browser. Use the interface to upload audio files and initiate transcription + speaker diarization.
+
+---
+
+## ▶️ Running the Pipeline Programmatically
+
+You can also use the backend pipeline directly in your scripts:
 
 ```python
 from src.pipeline import run_pipeline
 
 run_pipeline('audio_inputs/your_audio_file.mp3', 'transcripts/')
 ```
-
-> You can also build a wrapper script for automation or batch processing.
 
 ---
 
@@ -108,19 +119,19 @@ This project uses the **local OpenAI Whisper** model for transcription. You can 
 
 ---
 
-## 📘 Troubleshooting
+## 🧾 Documentation Policy
+
+Documentation (including this `README.md`) is kept up-to-date with all feature additions or modifications. See the `docs/` directory for extended usage and technical details.
+
+---
+
+## 🧩 Troubleshooting
 
 | Issue                           | Solution                                                               |
 | ------------------------------- | ---------------------------------------------------------------------- |
 | `pyannote` model download fails | Ensure you’ve authenticated with your Hugging Face token.              |
 | CUDA errors or slow performance | Ensure you have a CUDA-compatible GPU and the correct PyTorch install. |
 | File format not supported       | Convert your file to `.wav` or `.mp3` before processing.               |
-
----
-
-## 🧾 Documentation Policy
-
-Documentation (including this `README.md`) is kept up-to-date with all feature additions or modifications. See `docs/` directory for extended usage and technical details.
 
 ---
 
@@ -142,9 +153,4 @@ We welcome contributions from the community!
 
 This project is licensed under the [MIT License](LICENSE).
 
----
-
-```
-
-Let me know if you'd like a version with badges, CI setup, or packaging instructions for PyPI.
 ```
