@@ -3,9 +3,9 @@ from typing import List, Dict
 import os
 import logging
 from pyannote.audio import Pipeline as DiarizationPipeline
-from pyannote.core import Annotation, Segment
+from pyannote.core import Annotation, Segment, Timeline
 import torch
-from src.overlap import OverlapDetector # Make sure this import path is correct
+from src.overlap import OverlapDetector
 from torch.cuda import empty_cache
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
@@ -28,8 +28,9 @@ def resolve_overlaps(diarization: Annotation, overlap_regions: List[tuple]) -> L
     resolved_segments = []
 
     # Process non-overlapping parts first
-    # The "support" of a timeline is the set of intervals where it is non-empty
-    non_overlap_timeline = original_timeline.gaps(Annotation(segments=overlap_regions).get_timeline())
+    # FIXED LOGIC: Correctly create a Timeline for gaps calculation
+    overlap_timeline = Timeline([Segment(start, end) for start, end in overlap_regions])
+    non_overlap_timeline = original_timeline.gaps(overlap_timeline)
     
     for segment in non_overlap_timeline:
         # Get speakers active in this non-overlapping segment

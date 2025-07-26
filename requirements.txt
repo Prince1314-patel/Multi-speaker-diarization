@@ -31,3 +31,4 @@ typing-extensions
 
 # UI
 streamlit
+gradio
