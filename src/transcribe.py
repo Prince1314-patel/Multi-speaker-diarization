@@ -2,9 +2,8 @@ import whisperx
 import logging
 from typing import List, Dict
 import torch
-# Remove pyannote imports if they are not used elsewhere, or keep them if they are.
-# from pyannote.core import Segment, Annotation
 import pandas as pd
+import traceback
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
@@ -14,11 +13,10 @@ def transcribe_with_whisperx(
     model_name: str = "large-v2",
     device: str = "cuda",
     batch_size: int = 16,
-    compute_type: str = "float16",
-    use_vad: bool = True
-) -> List[Dict]:
+    compute_type: str = "float16"
+) -> Dict: # <-- CORRECTED RETURN TYPE
     """
-    Transcribes an audio file using WhisperX, aligns with diarization, and uses VAD for segmentation.
+    Transcribes an audio file using WhisperX and aligns with diarization.
 
     Args:
         audio_path (str): Path to the audio file.
@@ -27,13 +25,13 @@ def transcribe_with_whisperx(
         device (str): Device to run the model on (e.g., "cuda", "cpu").
         batch_size (int): Batch size for transcription.
         compute_type (str): Compute type for the model (e.g., "float16", "int8").
-        use_vad (bool): Whether to use Voice Activity Detection (VAD) for pre-segmentation.
 
     Returns:
-        List[Dict]: A list of transcribed segments, with speaker and word-level timestamps.
+        Dict: A dictionary containing a list of transcribed segments under the 'segments' key.
     """
     try:
         # 1. Load the WhisperX model
+        logging.info(f"Loading whisperx model: {model_name}")
         model = whisperx.load_model(model_name, device, compute_type=compute_type)
 
         # 2. Load the audio
@@ -42,59 +40,61 @@ def transcribe_with_whisperx(
         # 3. Transcribe the audio
         logging.info("Transcribing audio with WhisperX...")
         result = model.transcribe(audio, batch_size=batch_size)
-        logging.info(f"Transcription result: {result}")
+        
+        # Check if transcription produced any segments
+        if not result.get("segments"):
+            logging.warning("Transcription produced no segments.")
+            return {"segments": []}
 
-        # 4. Align the transcription with diarization
-        logging.info("Aligning transcription with diarization...")
+        # 4. Align the transcription
+        logging.info("Aligning transcription...")
         model_a, metadata = whisperx.load_align_model(language_code=result["language"], device=device)
         aligned_result = whisperx.align(result["segments"], model_a, metadata, audio, device, return_char_alignments=False)
-        logging.info(f"Alignment result: {aligned_result}")
 
-        # Filter out segments that have no words.
+        # Filter out segments that have no words after alignment.
         segments_with_words = [
             segment for segment in aligned_result["segments"] if 'words' in segment and len(segment['words']) > 0
         ]
         if not segments_with_words:
-            logging.warning("No segments with words found after alignment. Returning empty list.")
-            return []
+            logging.warning("No segments with words found after alignment. Returning empty result.")
+            return {"segments": []}
         
         aligned_result["segments"] = segments_with_words
 
-        # ---- START OF FIX ----
-        # 2. CONVERT DIARIZATION LIST TO A PANDAS DATAFRAME
-        # The assign_word_speakers function expects a DataFrame with 'speaker', 'start', and 'end' columns.
+        # 5. Convert diarization list to a pandas DataFrame
         if not diarization:
             logging.warning("Diarization data is empty. Cannot assign speakers.")
-            # If you want to return the transcription without speaker labels, you can do that here.
-            # For now, we create an empty DataFrame to avoid errors.
-            diarize_df = pd.DataFrame(columns=['speaker', 'start', 'end'])
-        else:
-            diarize_df = pd.DataFrame(diarization)
-            # Ensure required columns exist
-            if not all(col in diarize_df.columns for col in ['speaker', 'start', 'end']):
-                raise ValueError("Diarization DataFrame must contain 'speaker', 'start', and 'end' columns.")
+            # Return the aligned transcript without speaker labels
+            return aligned_result
+        
+        diarize_df = pd.DataFrame(diarization)
+        if not all(col in diarize_df.columns for col in ['speaker', 'start', 'end']):
+            raise ValueError("Diarization DataFrame must contain 'speaker', 'start', and 'end' columns.")
 
-        # 5. Assign words to speakers using the diarization DataFrame
+        # 6. Assign words to speakers
+        logging.info("Assigning speakers to words...")
         final_result = whisperx.assign_word_speakers(diarize_df, aligned_result)
+
+        # ---- START OF FIX ----
+        # The final_result is already in the correct dictionary format.
+        # We will just clean up the text and ensure the structure is consistent.
+        
+        logging.info("Finalizing transcript format...")
+        
+        # The final_result from whisperx is the dictionary we need.
+        # We can optionally iterate through it to clean up text, but we must return the dictionary itself.
+        if "segments" in final_result and final_result["segments"]:
+            for segment in final_result["segments"]:
+                if 'text' in segment:
+                    segment['text'] = segment['text'].strip()
+        
+        # Return the entire dictionary, which contains the 'segments' key.
+        return final_result
         # ---- END OF FIX ----
 
-        # Reformat the output to match the expected structure
-        logging.info("Reformatting output...")
-        transcribed_segments = []
-        for segment in final_result["segments"]:
-            if 'speaker' in segment and 'start' in segment and 'end' in segment and 'text' in segment:
-                transcribed_segments.append({
-                    "speaker": segment["speaker"],
-                    "start": segment["start"],
-                    "end": segment["end"],
-                    "text": segment["text"].strip(),
-                    "words": segment.get("words", [])
-                })
-
-        return transcribed_segments
-
     except Exception as e:
-        import traceback
         logging.error(f"Error during WhisperX transcription: {e}")
         logging.error(traceback.format_exc())
-        return []
+        # Return an empty structure that matches the expected output format
+        return {"segments": []}
+
