@@ -96,7 +96,8 @@ def run_pipeline(input_audio_path: str, output_dir: str):
     logging.info("Transcribing segments...")
     # Optimize batch processing for L4 GPU (24GB VRAM)
     # A batch_size of 32 is a common starting point for L4 GPUs, adjust as needed.
-    transcribed_segments = transcribe_with_whisperx(processed_audio, formatted_for_transcription, batch_size=32)
+    transcribed_segments_dict = transcribe_with_whisperx(processed_audio, formatted_for_transcription, batch_size=32)
+    transcribed_segments = transcribed_segments_dict.get("segments", [])
     if not transcribed_segments:
         logging.error("Transcription failed or returned no results.")
         return

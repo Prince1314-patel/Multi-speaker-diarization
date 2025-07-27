@@ -69,8 +69,8 @@ def process_audio_pipeline(audio_path, num_speakers, progress=gr.Progress(track_
             diarization=seg_dicts,
             device=device
         )
-        if not results or 'segments' not in results:
-            raise gr.Error("Transcription failed or returned invalid data.")
+        if not results or 'segments' not in results or not results['segments']:
+            raise gr.Error("Transcription complete, but no speech was detected in the audio.")
 
         # 5. Format and Display Transcript
         progress(0.9, desc="Formatting transcript...")
