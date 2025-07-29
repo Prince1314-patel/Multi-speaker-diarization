@@ -1,20 +1,46 @@
 import os
 import json
 import csv
+import logging
+from typing import List, Dict, Any, Tuple
+from intervaltree import Interval, IntervalTree
+
 from src.preprocess import preprocess_audio
 from src.diarization import diarize_audio
 from src.transcribe import transcribe_with_whisperx
-import logging
-from intervaltree import Interval, IntervalTree
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
-def merge_segments(segments: list) -> list:
+def merge_segments_reducer(a, b):
     """
-    Merges overlapping and adjacent segments from the same speaker.
+    A reducer function for intervaltree to correctly merge segment data.
+    It combines the 'text' and 'words' from two segments.
+    """
+    # a is the accumulated data, b is the data from the new interval being merged.
+    # The data is a tuple: (original_index, segment_dict)
+    
+    # Unpack the data
+    _idx_a, seg_a = a
+    _idx_b, seg_b = b
+
+    # Create a new combined segment dictionary
+    combined_seg = {
+        'text': (seg_a.get('text', '') + ' ' + seg_b.get('text', '')).strip(),
+        'words': seg_a.get('words', []) + seg_b.get('words', []),
+        # Keep other relevant fields if necessary, like speaker
+        'speaker': seg_a.get('speaker') 
+    }
+    
+    # The new data for the merged interval is a placeholder index (-1) and the combined dict
+    return (-1, combined_seg)
+
+def merge_segments(segments: List) -> List:
+    """
+    Merges overlapping and adjacent transcribed segments from the same speaker
+    using a robust reduction method.
 
     Args:
-        segments (list): A list of transcribed segments.
+        segments (list): A list of transcribed segments from whisperx.
 
     Returns:
         list: A list of merged segments.
@@ -22,124 +48,78 @@ def merge_segments(segments: list) -> list:
     if not segments:
         return []
 
-    # Sort segments by start time first
-    segments.sort(key=lambda x: x['start'])
-
-    # Build an interval tree for each speaker
     speaker_trees = {}
     for i, seg in enumerate(segments):
-        speaker = seg.get('speaker', 'UNKNOWN')
+        speaker = seg.get('speaker')
+        if speaker is None: # Handle unassigned speakers gracefully
+            speaker = "UNKNOWN_SPEAKER"
+        
         if speaker not in speaker_trees:
             speaker_trees[speaker] = IntervalTree()
         
-        # Ensure we have valid start/end times
-        start_time = float(seg.get('start', 0))
-        end_time = float(seg.get('end', start_time + 0.1))
-        
-        # Add small buffer to avoid identical intervals
-        speaker_trees[speaker].add(Interval(start_time, end_time, (i, seg)))
+        # Store the original index and the full segment data in the interval
+        speaker_trees[speaker].add(Interval(seg['start'], seg['end'], (i, seg)))
 
-    # Merge intervals for each speaker
+    # Merge intervals for each speaker using the safe reducer
     for speaker in speaker_trees:
-        speaker_trees[speaker].merge_overlaps()
+        # The reducer ensures that data is aggregated correctly only from
+        # the intervals that are actually being merged.
+        speaker_trees[speaker].merge_overlaps(data_reducer=merge_segments_reducer)
 
-    # Reconstruct the merged segments
+    # Reconstruct the final list of segments from the merged trees
     merged_segments = []
     for speaker, tree in speaker_trees.items():
         for interval in sorted(tree):
-            # Get all original segments that contributed to this merged interval
-            original_segments = []
-            for iv in tree[interval.begin:interval.end]:
-                original_segments.append(iv.data[1])
-            
-            # Sort by start time
-            original_segments.sort(key=lambda x: x['start'])
-            
-            # Aggregate text and words
-            texts = []
-            all_words = []
-            
-            for seg in original_segments:
-                if seg.get('text', '').strip():
-                    texts.append(seg['text'].strip())
-                if seg.get('words'):
-                    all_words.extend(seg['words'])
-            
-            # Create merged segment
-            merged_segment = {
-                'speaker': speaker,
+            _idx, data = interval.data
+            merged_segments.append({
+                'speaker': speaker if speaker != "UNKNOWN_SPEAKER" else None,
                 'start': interval.begin,
                 'end': interval.end,
-                'text': ' '.join(texts).strip(),
-                'words': all_words
-            }
-            
-            # Only add segments with actual content
-            if merged_segment['text']:
-                merged_segments.append(merged_segment)
+                'text': data.get('text', '').strip(),
+                'words': data.get('words', [])
+            })
 
-    # Sort the final merged segments by start time
     merged_segments.sort(key=lambda x: x['start'])
-    
-    logging.info(f"Merged {len(segments)} segments into {len(merged_segments)} final segments")
     return merged_segments
 
-def validate_segments(segments: list) -> list:
+def enrich_with_overlaps(segments: List, overlap_regions: List) -> List:
     """
-    Validates and cleans up segments before final output.
-    
+    Enriches transcribed segments with overlap information.
+
+    This is the final "Enrich" step. It iterates through the final segments and
+    adds an 'is_overlap' flag if the segment's time range intersects with a
+    detected overlap region.
+
     Args:
-        segments: List of segments to validate
-    
+        segments (List): The final list of transcribed and merged segments.
+        overlap_regions (List[Tuple[float, float]]): List of (start, end) tuples for overlaps.
+
     Returns:
-        List of validated segments
+        List: The list of segments, with each segment now containing an 'is_overlap' key.
     """
-    valid_segments = []
-    
+    if not overlap_regions:
+        for seg in segments:
+            seg['is_overlap'] = False
+        return segments
+
+    overlap_tree = IntervalTree()
+    for start, end in overlap_regions:
+        overlap_tree.add(Interval(start, end))
+
     for seg in segments:
-        # Skip segments without text or with invalid speakers
-        if not seg.get('text', '').strip():
-            continue
-            
-        # Clean up speaker labels
-        speaker = seg.get('speaker', 'UNKNOWN')
-        if speaker in [None, 'None', '']:
-            speaker = 'UNKNOWN'
+        # Check if the segment's interval [start, end] overlaps with any interval in the tree.
+        seg['is_overlap'] = overlap_tree.overlaps(seg['start'], seg['end'])
         
-        # Ensure proper data types
-        try:
-            start_time = float(seg.get('start', 0))
-            end_time = float(seg.get('end', start_time + 0.1))
-        except (ValueError, TypeError):
-            logging.warning(f"Invalid timing in segment: {seg}")
-            continue
-        
-        # Skip very short segments
-        if end_time - start_time < 0.1:
-            continue
-        
-        valid_segments.append({
-            'speaker': str(speaker),
-            'start': start_time,
-            'end': end_time,
-            'text': seg['text'].strip(),
-            'words': seg.get('words', [])
-        })
-    
-    logging.info(f"Validated {len(valid_segments)} segments from {len(segments)} original segments")
-    return valid_segments
+    return segments
 
 def run_pipeline(input_audio_path: str, output_dir: str, num_speakers: int = 0):
     """
-    Runs the full diarization and transcription pipeline.
+    Runs the full, refactored diarization and transcription pipeline.
 
     Args:
         input_audio_path (str): Path to the user-supplied audio file.
         output_dir (str): Directory to store outputs.
-        num_speakers (int): Number of speakers to detect (0 for automatic detection).
-
-    Returns:
-        None
+        num_speakers (int): The number of speakers to detect (0 for automatic).
     """
     os.makedirs(output_dir, exist_ok=True)
     
@@ -147,103 +127,78 @@ def run_pipeline(input_audio_path: str, output_dir: str, num_speakers: int = 0):
     logging.info("Preprocessing audio...")
     success, processed_audio = preprocess_audio(input_audio_path, output_dir)
     if not success:
-        logging.error(f"Preprocessing failed: {processed_audio}")
+        logging.error(f"Preprocessing failed: {processed_audio}") # <-- THIS IS THE FIX
         return
 
-    # Step 2: Diarization
-    logging.info("Running diarization...")
-    diarization_segments = diarize_audio(processed_audio, num_speakers)
+    # Step 2: Diarize (New "Diarize" step)
+    # This now returns a clean timeline AND separate overlap regions.
+    logging.info("Running diarization and overlap detection...")
+    diarization_segments, overlap_regions = diarize_audio(processed_audio, num_speakers)
     if not diarization_segments:
         logging.error("Diarization failed or returned no segments.")
+        if os.path.exists(processed_audio):
+            os.remove(processed_audio)
         return
 
-    logging.info(f"Diarization produced {len(diarization_segments)} segments")
-    
-    # Debug: Print diarization results
-    speakers_found = set(seg['speaker'] for seg in diarization_segments)
-    logging.info(f"Speakers found in diarization: {sorted(speakers_found)}")
-
-    # Step 3: Format segments for transcription (simplified format)
-    formatted_for_transcription = []
-    for seg in diarization_segments:
-        formatted_for_transcription.append({
-            'speaker': seg['speaker'],
-            'start': seg['start'],
-            'end': seg['end']
-        })
-
-    # Step 4: Transcription
-    logging.info("Transcribing segments...")
-    # Optimize batch processing for available GPU memory
-    transcribed_segments_dict = transcribe_with_whisperx(
+    # Step 3: Transcription and Alignment (New "Align" step)
+    # This step now receives the clean, unambiguous timeline and will succeed.
+    logging.info("Transcribing segments with WhisperX...")
+    transcribed_result = transcribe_with_whisperx(
         processed_audio, 
-        formatted_for_transcription, 
+        diarization_segments, 
         batch_size=32
     )
-    
-    transcribed_segments = transcribed_segments_dict.get("segments", [])
+    transcribed_segments = transcribed_result.get("segments", [])
     if not transcribed_segments:
         logging.error("Transcription failed or returned no results.")
+        if os.path.exists(processed_audio):
+            os.remove(processed_audio)
         return
 
-    logging.info(f"Transcription produced {len(transcribed_segments)} segments")
-    
-    # Debug: Check speaker assignments in transcription
-    transcribed_speakers = set(seg.get('speaker', 'None') for seg in transcribed_segments)
-    logging.info(f"Speakers found in transcription: {sorted(transcribed_speakers)}")
+    # Step 4: Merge transcribed segments
+    logging.info("Merging adjacent transcribed segments...")
+    merged_segments = merge_segments(transcribed_segments)
 
-    # Step 5: Validate segments
-    validated_segments = validate_segments(transcribed_segments)
-    if not validated_segments:
-        logging.error("No valid transcribed segments found.")
-        return
+    # Step 5: Enrich with Overlap Data (New "Enrich" step)
+    # This is the final post-processing step to add overlap metadata.
+    logging.info("Enriching transcript with overlap information...")
+    final_results = enrich_with_overlaps(merged_segments, overlap_regions)
 
-    # Step 6: Merge transcribed segments
-    logging.info("Merging transcribed segments...")
-    merged_results = merge_segments(validated_segments)
-
-    if not merged_results:
-        logging.error("No segments remained after merging.")
-        return
-
-    # Final speaker count
-    final_speakers = set(seg['speaker'] for seg in merged_results)
-    logging.info(f"Final output contains {len(merged_results)} segments with speakers: {sorted(final_speakers)}")
-
-    # Step 7: Export results
+    # Step 6: Export results
     base = os.path.splitext(os.path.basename(input_audio_path))[0]
-    
-    # Export JSON
-    json_path = os.path.join(output_dir, f"{base}_diarization.json")
-    with open(json_path, 'w', encoding='utf-8') as f:
-        json.dump(merged_results, f, indent=2, ensure_ascii=False)
-    
-    # Export CSV
-    csv_path = os.path.join(output_dir, f"{base}_diarization.csv")
-    with open(csv_path, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=['speaker', 'start', 'end', 'text'])
-        writer.writeheader()
-        for row in merged_results:
-            writer.writerow({
-                'speaker': row['speaker'],
-                'start': f"{row['start']:.2f}",
-                'end': f"{row['end']:.2f}",
-                'text': row['text']
-            })
-    
-    # Export TXT (human-readable format)
-    txt_path = os.path.join(output_dir, f"{base}_diarization.txt")
-    with open(txt_path, 'w', encoding='utf-8') as f:
-        for row in merged_results:
-            f.write(f"[{row['start']:.2f}-{row['end']:.2f}] Speaker {row['speaker']}: {row['text']}\n")
-    
-    logging.info(f"Pipeline complete. Results saved to {output_dir}")
-    logging.info(f"Files created:")
-    logging.info(f"  - JSON: {json_path}")
-    logging.info(f"  - CSV: {csv_path}")
-    logging.info(f"  - TXT: {txt_path}")
+    logging.info("Exporting final results...")
 
-    # Clean up processed audio file
+    # Export JSON (with new 'is_overlap' field)
+    json_path = os.path.join(output_dir, f"{base}_transcript.json")
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(final_results, f, indent=2)
+
+    # Export CSV
+    csv_path = os.path.join(output_dir, f"{base}_transcript.csv")
+    with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+        # Add 'is_overlap' to the header
+        writer = csv.DictWriter(f, fieldnames=['speaker', 'start', 'end', 'text', 'is_overlap'])
+        writer.writeheader()
+        for row in final_results:
+            writer.writerow({
+                'speaker': row.get('speaker'),
+                'start': row.get('start'),
+                'end': row.get('end'),
+                'text': row.get('text'),
+                'is_overlap': row.get('is_overlap', False)
+            })
+
+    # Export TXT
+    txt_path = os.path.join(output_dir, f"{base}_transcript.txt")
+    with open(txt_path, 'w', encoding='utf-8') as f:
+        for row in final_results:
+            overlap_marker = " (OVERLAP)" if row.get('is_overlap') else ""
+            speaker_label = row.get('speaker', 'UNKNOWN')
+            f.write(f"[{row['start']:.2f}-{row['end']:.2f}] {speaker_label}{overlap_marker}: {row['text']}\n")
+
+    logging.info(f"Pipeline complete. Results saved to {output_dir}")
+
+    # Clean up intermediate processed audio file
     if os.path.exists(processed_audio):
         os.remove(processed_audio)
         logging.info(f"Cleaned up intermediate audio file: {processed_audio}")

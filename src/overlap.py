@@ -26,12 +26,10 @@ class OverlapDetector:
         self.device = torch.device("cuda" if use_cuda and torch.cuda.is_available() else "cpu")
         self.pipeline = None
         
-    def initialize(self, auth_token: str) -> bool:
+    def initialize(self) -> bool:
         """
-        Initialize the Pyannote overlap detection pipeline.
-        
-        Args:
-            auth_token (str): HuggingFace authentication token
+        Initialize the Pyannote overlap detection pipeline by reading the token
+        from the environment.
             
         Returns:
             bool: True if initialization successful, False otherwise
@@ -108,7 +106,7 @@ class OverlapDetector:
         for speaker, start, end in diarization_segments:
             segment = Segment(start, end)
             # Check if this segment intersects with any overlap region
-            is_overlap = any(segment.intersects(ovl) for ovl in overlap_timeline)
+            is_overlap = overlap_timeline.intersects(segment) # <-- THIS IS THE FIX
             enhanced_segments.append((speaker, start, end, is_overlap))
             
         return enhanced_segments

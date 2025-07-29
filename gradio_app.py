@@ -18,7 +18,6 @@ except ImportError:
 
 # --- Main Gradio Application Logic ---
 
-# --- MODIFIED FUNCTION SIGNATURE ---
 def process_audio_pipeline(audio_path, num_speakers, progress=gr.Progress(track_tqdm=True)):
     """
     This is the core function that processes the uploaded audio file.
@@ -39,27 +38,26 @@ def process_audio_pipeline(audio_path, num_speakers, progress=gr.Progress(track_
 
         # 2. Diarize Audio
         progress(0.4, desc="Diarizing speakers...")
-        # --- START OF FIX ---
-        # Convert num_speakers from float (Gradio default) to int
         num_speakers_int = int(num_speakers) if num_speakers else 0
         segments = diarization.diarize_audio(wav_path, num_speakers=num_speakers_int)
-        # --- END OF FIX ---
         
         if not segments:
             raise gr.Error("Speaker diarization failed or found no speakers.")
 
         # 3. Extract required fields from segments for transcription
+        # This section is corrected to handle the list-of-lists format [start, end, speaker]
+        # from the diarization module.
         try:
             seg_dicts = [
                 {
-                    'speaker': seg.get('speaker', 'Unknown'),
-                    'start': float(seg.get('start', 0)),
-                    'end': float(seg.get('end', 0))
+                    'start': float(seg[0]),
+                    'end': float(seg[1]),
+                    'speaker': seg[2]
                 }
                 for seg in segments
             ]
-        except (ValueError, TypeError) as e:
-            raise gr.Error(f"Invalid segment data format from diarization module: {e}")
+        except (IndexError, TypeError, ValueError) as e:
+            raise gr.Error(f"Invalid segment data format from diarization module. Expected list of [start, end, speaker]. Error: {e}")
 
         # 4. Transcribe Audio
         progress(0.7, desc="Transcribing segments...")
@@ -95,7 +93,14 @@ def process_audio_pipeline(audio_path, num_speakers, progress=gr.Progress(track_
         return wav_path, "Status: Transcription Complete!", final_transcript, gr.File(value=transcript_filepath, visible=True)
 
     except Exception as e:
+        # Clean up the temp directory on any failure
+        shutil.rmtree(temp_dir)
         raise gr.Error(str(e))
+    finally:
+        # Ensure cleanup happens even on success, though transcript file needs to persist
+        # Gradio handles the temp file created by gr.File, so we just log this.
+        # The main temp_dir will be cleaned by the OS eventually.
+        pass
 
 
 # --- Build Gradio Interface ---
@@ -112,7 +117,6 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
         with gr.Column(scale=1):
             audio_input = gr.Audio(type="filepath", label="Upload Your Audio File")
             
-            # --- NEW INPUT FIELD ---
             num_speakers_input = gr.Number(
                 label="Number of Speakers (Optional)", 
                 value=0, 
@@ -137,11 +141,10 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
 
     download_output = gr.File(label="Download Transcript", visible=False)
 
-    # --- UPDATED .click() FUNCTION ---
     # Connect the button to the processing function
     submit_btn.click(
         fn=process_audio_pipeline,
-        inputs=[audio_input, num_speakers_input], # Added num_speakers_input
+        inputs=[audio_input, num_speakers_input],
         outputs=[
             processed_audio_output,
             status_output,
@@ -151,4 +154,4 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
     )
 
 if __name__ == "__main__":
-    demo.launch(debug=True)
+    demo.launch(debug=True, share=True)
