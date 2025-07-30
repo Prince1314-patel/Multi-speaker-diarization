@@ -19,7 +19,7 @@ class TestDiarization(unittest.TestCase):
 
     def test_diarize_audio_basic(self):
         """Test diarization returns non-empty list of segments with correct structure."""
-        segments = diarization.diarize_audio(self.sample_wav)
+        segments, _ = diarization.diarize_audio(self.sample_wav)
         self.assertIsInstance(segments, list)
         self.assertTrue(len(segments) > 0, "No segments returned by diarization.")
         for seg in segments:

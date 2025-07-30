@@ -39,25 +39,14 @@ def process_audio_pipeline(audio_path, num_speakers, progress=gr.Progress(track_
         # 2. Diarize Audio
         progress(0.4, desc="Diarizing speakers...")
         num_speakers_int = int(num_speakers) if num_speakers else 0
-        segments = diarization.diarize_audio(wav_path, num_speakers=num_speakers_int)
+        diarization_segments, overlap_regions = diarization.diarize_audio(wav_path, num_speakers=num_speakers_int)
         
-        if not segments:
+        if not diarization_segments:
             raise gr.Error("Speaker diarization failed or found no speakers.")
 
-        # 3. Extract required fields from segments for transcription
-        # This section is corrected to handle the list-of-lists format [start, end, speaker]
-        # from the diarization module.
-        try:
-            seg_dicts = [
-                {
-                    'start': float(seg[0]),
-                    'end': float(seg[1]),
-                    'speaker': seg[2]
-                }
-                for seg in segments
-            ]
-        except (IndexError, TypeError, ValueError) as e:
-            raise gr.Error(f"Invalid segment data format from diarization module. Expected list of [start, end, speaker]. Error: {e}")
+        # 3. Use diarization_segments (already a list of dicts) for transcription
+        seg_dicts = diarization_segments
+        # No need to convert from list-of-lists; diarization.py returns list of dicts
 
         # 4. Transcribe Audio
         progress(0.7, desc="Transcribing segments...")
