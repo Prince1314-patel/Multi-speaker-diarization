@@ -1,5 +1,6 @@
 import unittest
 import os
+import tempfile
 from src import preprocess
 
 class TestPreprocess(unittest.TestCase):
@@ -7,8 +8,15 @@ class TestPreprocess(unittest.TestCase):
     Unit tests for audio preprocessing functions.
     """
     def setUp(self):
-        self.sample_wav = 'audio_inputs/harvard-sample-audio.wav'
-        self.output_dir = 'audio_inputs/'
+        self.temp_audio = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+        self.sample_wav = self.temp_audio.name
+        self.output_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        self.temp_audio.close()
+        os.unlink(self.temp_audio.name)
+        import shutil
+        shutil.rmtree(self.output_dir)
 
     def test_validate_audio_file(self):
         """Test validation of a supported WAV file."""
@@ -17,11 +25,10 @@ class TestPreprocess(unittest.TestCase):
 
     def test_convert_to_wav_mono_16k(self):
         """Test conversion of WAV file to mono 16kHz WAV."""
-        output_path = os.path.join(self.output_dir, 'harvard-sample-audio_mono16k.wav')
+        output_path = os.path.join(self.output_dir, 'dummy_mono16k.wav')
         success = preprocess.convert_to_wav_mono_16k(self.sample_wav, output_path)
         self.assertTrue(success)
         self.assertTrue(os.path.isfile(output_path))
-        # Clean up
         if os.path.isfile(output_path):
             os.remove(output_path)
 
@@ -30,7 +37,6 @@ class TestPreprocess(unittest.TestCase):
         success, result = preprocess.preprocess_audio(self.sample_wav, self.output_dir)
         self.assertTrue(success, result)
         self.assertTrue(os.path.isfile(result))
-        # Clean up
         if os.path.isfile(result):
             os.remove(result)
 

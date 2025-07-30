@@ -1,20 +1,20 @@
 import pytest
 import os
 import json
+import tempfile
 from src.pipeline import run_pipeline
 
 @pytest.fixture
 def sample_audio_path():
-    # Create a dummy audio file for testing
-    dummy_audio_path = "/tmp/test_audio.wav"
-    if not os.path.exists(dummy_audio_path):
+    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_audio:
         import numpy as np
         import soundfile as sf
         sr = 16000
         duration = 5 # seconds
         audio = np.zeros(duration * sr)
-        sf.write(dummy_audio_path, audio, sr)
-    return dummy_audio_path
+        sf.write(temp_audio.name, audio, sr)
+        yield temp_audio.name
+        os.unlink(temp_audio.name)
 
 @pytest.fixture
 def output_dir():
