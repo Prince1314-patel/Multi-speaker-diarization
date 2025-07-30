@@ -152,5 +152,3 @@ We welcome contributions from the community!
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
-
-```
