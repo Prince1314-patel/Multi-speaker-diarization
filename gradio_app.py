@@ -10,15 +10,15 @@ load_dotenv()
 
 # --- User Module Imports ---
 try:
-    from src import preprocess, diarization, transcribe
+    from src import preprocess, diarization, transcribe, utils
 except ImportError:
     print("Error: Could not import modules from 'src' directory.")
-    print("Please ensure 'preprocess.py', 'diarization.py', and 'transcribe.py' exist in a 'src' folder.")
+    print("Please ensure 'preprocess.py', 'diarization.py', 'transcribe.py', and 'utils.py' exist in a 'src' folder.")
     exit()
 
 # --- Main Gradio Application Logic ---
 
-def process_audio_pipeline(audio_path, num_speakers, progress=gr.Progress(track_tqdm=True)):
+def process_audio_pipeline(audio_path, num_speakers, *speaker_values, progress=gr.Progress(track_tqdm=True)):
     """
     This is the core function that processes the uploaded audio file.
     It directly calls the user's modules for each step of the pipeline.
@@ -59,27 +59,31 @@ def process_audio_pipeline(audio_path, num_speakers, progress=gr.Progress(track_
         if not results or 'segments' not in results or not results['segments']:
             raise gr.Error("Transcription complete, but no speech was detected in the audio.")
 
-        # 5. Format and Display Transcript
-        progress(0.9, desc="Formatting transcript...")
-        transcript_lines = []
-        for r in results['segments']:
-            speaker = r.get('speaker', 'Unknown')
-            start = r.get('start', 0)
-            end = r.get('end', 0)
-            text = r.get('text', '').strip()
-            line = f"[{start:.2f}s - {end:.2f}s] {speaker}: {text}"
-            transcript_lines.append(line)
+        # 5. Extract transcript segments and unique speakers
+        progress(0.8, desc="Processing transcript...")
+        transcript_segments = results['segments']
+        unique_speakers = utils.extract_unique_speakers(transcript_segments)
         
-        final_transcript = "\n".join(transcript_lines)
+        # 6. Create speaker mapping from user input
+        speaker_names_dict = {}
+        for i, name in enumerate(speaker_values):
+            if name and name.strip():  # Only add non-empty names
+                speaker_names_dict[f"SPEAKER_{i:02d}"] = name.strip()
+        
+        speaker_mapping = utils.create_speaker_mapping(speaker_names_dict, unique_speakers)
+        
+        # 7. Post-process transcript
+        progress(0.9, desc="Formatting transcript...")
+        processed_transcript = utils.post_process_transcript(transcript_segments, speaker_mapping)
 
-        # 6. Create a downloadable transcript file
+        # 8. Create a downloadable transcript file
         transcript_filepath = os.path.join(temp_dir, "transcript.txt")
         with open(transcript_filepath, "w", encoding="utf-8") as f:
-            f.write(final_transcript)
+            f.write(processed_transcript)
 
-        # 7. Final update to the UI
+        # 9. Final update to the UI
         progress(1.0, desc="Complete!")
-        return wav_path, "Status: Transcription Complete!", final_transcript, gr.File(value=transcript_filepath, visible=True)
+        return wav_path, "Status: Transcription Complete!", processed_transcript, gr.File(value=transcript_filepath, visible=True)
 
     except Exception as e:
         # Clean up the temp directory on any failure
@@ -90,6 +94,9 @@ def process_audio_pipeline(audio_path, num_speakers, progress=gr.Progress(track_
         # Gradio handles the temp file created by gr.File, so we just log this.
         # The main temp_dir will be cleaned by the OS eventually.
         pass
+
+
+
 
 
 # --- Build Gradio Interface ---
@@ -108,10 +115,14 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
             
             num_speakers_input = gr.Number(
                 label="Number of Speakers (Optional)", 
-                value=0, 
+                value=2, 
                 info="Leave at 0 for automatic detection.",
                 precision=0 # Ensures it's an integer
             )
+            
+            # Speaker name inputs
+            gr.Markdown("### Speaker Name Assignment")
+            gr.Markdown("Assign names to speakers (leave empty to keep default speaker labels):")
             
             submit_btn = gr.Button("Start Transcription", variant="primary")
         
@@ -130,10 +141,29 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
 
     download_output = gr.File(label="Download Transcript", visible=False)
 
+    # Create speaker input fields
+    speaker_inputs = []
+    for i in range(4):  # Create 4 speaker input fields by default
+        speaker_inputs.append(
+            gr.Textbox(
+                label=f"Name for SPEAKER_{i:02d}",
+                placeholder=f"Enter name for SPEAKER_{i:02d} (or leave empty for default)",
+                value=""
+            )
+        )
+
+    # Function to collect speaker names from inputs
+    def collect_speaker_names(*speaker_values):
+        speaker_names = {}
+        for i, name in enumerate(speaker_values):
+            if name and name.strip():  # Only add non-empty names
+                speaker_names[f"SPEAKER_{i:02d}"] = name.strip()
+        return speaker_names
+
     # Connect the button to the processing function
     submit_btn.click(
         fn=process_audio_pipeline,
-        inputs=[audio_input, num_speakers_input],
+        inputs=[audio_input, num_speakers_input] + speaker_inputs,
         outputs=[
             processed_audio_output,
             status_output,

@@ -1,15 +1,15 @@
 import streamlit as st
 import os
 import tempfile
-from src import preprocess, diarization, transcribe
+from src import preprocess, diarization, transcribe, utils
 from dotenv import load_dotenv
 import torch
 
 # It's good practice to handle potential missing modules if this script is shared
 try:
-    from src import preprocess, diarization, transcribe
+    from src import preprocess, diarization, transcribe, utils
 except ImportError:
-    st.error("Missing source files (preprocess, diarization, transcribe). Make sure they are in a 'src' folder.")
+    st.error("Missing source files (preprocess, diarization, transcribe, utils). Make sure they are in a 'src' folder.")
     st.stop()
 
 
@@ -62,20 +62,45 @@ if uploaded_file is not None:
             else:
                 # Display transcript
                 st.success("Transcription complete!")
-                transcript_lines = []
-                for r in results:
-                    # Use .get() with defaults for robust dictionary access from transcription results
-                    speaker = r.get('speaker', 'Unknown')
-                    start = r.get('start', 0)
-                    end = r.get('end', 0)
-                    text = r.get('text', r.get('error', ''))
-                    line = f"[{float(start):.2f}-{float(end):.2f}] **{speaker}**: {text}"
-                    transcript_lines.append(line)
                 
-                transcript = "\n\n".join(transcript_lines)
-                st.markdown("### Diarized Transcript")
-                st.markdown(transcript)
-                st.download_button("Download Transcript", transcript, file_name="transcript.txt")
+                # Extract transcript segments
+                transcript_segments = results.get('segments', [])
+                if not transcript_segments:
+                    st.error("No transcript segments found.")
+                    st.stop()
+                
+                # Extract unique speakers for name input
+                unique_speakers = utils.extract_unique_speakers(transcript_segments)
+                
+                # Speaker name input section
+                st.markdown("### Speaker Name Assignment")
+                st.write("Assign names to speakers (leave empty to keep default speaker labels):")
+                
+                speaker_names = {}
+                for speaker in unique_speakers:
+                    speaker_names[speaker] = st.text_input(
+                        f"Name for {speaker}:",
+                        key=f"speaker_{speaker}",
+                        placeholder=f"Enter name for {speaker} (or leave empty for default)"
+                    )
+                
+                # Create speaker mapping
+                speaker_mapping = utils.create_speaker_mapping(speaker_names, unique_speakers)
+                
+                # Post-process transcript
+                processed_transcript = utils.post_process_transcript(transcript_segments, speaker_mapping)
+                
+                # Display processed transcript
+                st.markdown("### Processed Transcript")
+                st.markdown(processed_transcript)
+                
+                # Download button for processed transcript
+                st.download_button(
+                    "Download Processed Transcript", 
+                    processed_transcript, 
+                    file_name="transcript.txt",
+                    mime="text/plain"
+                )
 
     except Exception as e:
         st.error(f"An unexpected error occurred: {e}")
