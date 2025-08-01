@@ -9,112 +9,116 @@ load_dotenv()
 
 class TestDiarization(unittest.TestCase):
     """
-    Unit tests for speaker diarization functions with enhanced overlap detection.
+    Unit tests for speaker diarization functions.
     """
+
     def setUp(self):
         self.temp_audio = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
         self.sample_wav = self.temp_audio.name
-        if 'HUGGINGFACE_TOKEN' not in os.environ:
-            os.environ['HUGGINGFACE_TOKEN'] = 'dummy_token_for_testing'
+        # Ensure a dummy Hugging Face token
+        os.environ.setdefault('HUGGINGFACE_TOKEN', 'dummy_token_for_testing')
 
     def tearDown(self):
         self.temp_audio.close()
-        os.unlink(self.temp_audio.name)
+        if os.path.exists(self.sample_wav):
+            os.unlink(self.sample_wav)
 
     @patch('src.diarization.Pipeline')
     def test_diarize_audio_basic(self, mock_pipeline):
         """Test diarization returns non-empty list of segments with correct structure."""
-        mock_diarization = MagicMock()
-        mock_segments = [
+        # Mock standard diarization pipeline
+        diar_pipeline = MagicMock()
+        diar_pipeline.to.return_value = diar_pipeline
+        diar_result = MagicMock()
+        diar_result.itertracks.return_value = [
             (MagicMock(start=0.0, end=1.0), None, "SPEAKER_1"),
-            (MagicMock(start=1.5, end=3.0), None, "SPEAKER_2")
+            (MagicMock(start=1.5, end=3.0), None, "SPEAKER_2"),
         ]
-        mock_diarization.itertracks.return_value = mock_segments
-        mock_diarization.get_timeline.return_value = MagicMock()
-        mock_pipeline.from_pretrained.return_value = mock_diarization
+        diar_pipeline.return_value = diar_result
 
-        segments, _ = diarization.diarize_audio(self.sample_wav)
+        # Mock overlap pipeline
+        overlap_pipeline = MagicMock()
+        overlap_pipeline.to.return_value = overlap_pipeline
+        overlap_result = MagicMock()
+        overlap_result.get_timeline.return_value = []
+        overlap_pipeline.return_value = overlap_result
+
+        # Set side_effect for from_pretrained
+        mock_pipeline.from_pretrained.side_effect = [diar_pipeline, overlap_pipeline]
+
+        segments, overlaps = diarization.diarize_audio(self.sample_wav)
+
+        # Assert segments
         self.assertIsInstance(segments, list)
-        self.assertTrue(len(segments) > 0)
+        self.assertEqual(len(segments), 2)
         for seg in segments:
             self.assertIsInstance(seg, dict)
-            required_keys = {'speaker', 'start', 'end', 'is_overlap', 'overlap_with'}
-            self.assertTrue(all(key in seg for key in required_keys))
+            self.assertIn('speaker', seg)
+            self.assertIn('start', seg)
+            self.assertIn('end', seg)
             self.assertIsInstance(seg['speaker'], str)
             self.assertIsInstance(seg['start'], float)
             self.assertIsInstance(seg['end'], float)
-            self.assertIsInstance(seg['is_overlap'], bool)
-            self.assertIsInstance(seg['overlap_with'], list)
             self.assertLess(seg['start'], seg['end'])
+
+        # Assert overlaps is empty
+        self.assertIsInstance(overlaps, list)
+        self.assertEqual(overlaps, [])
 
     @patch('src.diarization.diarize_audio')
     def test_overlap_detection(self, mock_diarize_audio):
-        """Test overlap detection functionality"""
+        """Test overlap detection functionality via return value mock."""
         mock_diarize_audio.return_value = (
             [
-                {
-                    'speaker': 'SPEAKER_1',
-                    'start': 1.0,
-                    'end': 3.0,
-                    'is_overlap': True,
-                    'overlap_with': ['SPEAKER_2']
-                },
-                {
-                    'speaker': 'SPEAKER_2',
-                    'start': 2.0,
-                    'end': 4.0,
-                    'is_overlap': True,
-                    'overlap_with': ['SPEAKER_1']
-                }
+                {'speaker': 'SPEAKER_1', 'start': 1.0, 'end': 3.0},
+                {'speaker': 'SPEAKER_2', 'start': 2.0, 'end': 4.0}
             ],
-            None
+            [(2.0, 3.0)]
         )
 
-        result, _ = diarization.diarize_audio(self.sample_wav)
-        overlapping_segments = [seg for seg in result if seg['is_overlap']]
-        self.assertTrue(len(overlapping_segments) > 0)
-        for seg in overlapping_segments:
-            self.assertTrue(len(seg['overlap_with']) > 0)
+        segments, overlaps = diarization.diarize_audio(self.sample_wav)
+        self.assertIsInstance(overlaps, list)
+        self.assertTrue(overlaps)
+        for start, end in overlaps:
+            self.assertIsInstance(start, float)
+            self.assertIsInstance(end, float)
+            self.assertLess(start, end)
 
     @patch('torch.cuda.is_available', return_value=True)
-    def test_gpu_path(self, mock_cuda_available):
-        """Test GPU usage path"""
-        with patch('src.diarization.Pipeline') as mock_pipeline:
-            mock_pipeline.from_pretrained.return_value.to = MagicMock()
-            diarization.diarize_audio(self.sample_wav)
-            mock_pipeline.from_pretrained.return_value.to.assert_called_once()
+    @patch('src.diarization.Pipeline')
+    def test_gpu_path(self, mock_pipeline, mock_cuda_available):
+        """Test GPU usage invokes .to() twice."""
+        dummy = MagicMock()
+        dummy.to.return_value = dummy
+        dummy.return_value = MagicMock(itertracks=lambda yield_label=True: [])
+        mock_pipeline.from_pretrained.return_value = dummy
+
+        diarization.diarize_audio(self.sample_wav)
+        self.assertEqual(dummy.to.call_count, 2)
 
     @patch('torch.cuda.is_available', return_value=False)
-    def test_cpu_fallback(self, mock_cuda_available):
-        """Test CPU fallback path"""
-        with patch('src.diarization.Pipeline') as mock_pipeline:
-            mock_pipeline.from_pretrained.return_value.to = MagicMock()
-            diarization.diarize_audio(self.sample_wav)
-            mock_pipeline.from_pretrained.return_value.to.assert_called_once()
+    @patch('src.diarization.Pipeline')
+    def test_cpu_fallback(self, mock_pipeline, mock_cuda_available):
+        """Test CPU fallback invokes .to() twice."""
+        dummy = MagicMock()
+        dummy.to.return_value = dummy
+        dummy.return_value = MagicMock(itertracks=lambda yield_label=True: [])
+        mock_pipeline.from_pretrained.return_value = dummy
+
+        diarization.diarize_audio(self.sample_wav)
+        self.assertEqual(dummy.to.call_count, 2)
 
     @patch('src.diarization.diarize_audio')
     def test_min_overlap_duration(self, mock_diarize_audio):
-        """Test different min_overlap_duration values"""
+        """Test that optional parameters do not break interface."""
         mock_diarize_audio.return_value = (
-            [
-                {
-                    'speaker': 'SPEAKER_1',
-                    'start': 1.0,
-                    'end': 2.0,
-                    'is_overlap': False,
-                    'overlap_with': []
-                }
-            ],
-            None
+            [{'speaker': 'SPEAKER_1', 'start': 1.0, 'end': 2.0}],
+            []
         )
 
-        durations = [0.1, 0.2, 0.5]
-        for duration in durations:
-            segments, _ = diarization.diarize_audio(
-                self.sample_wav,
-                min_overlap_duration=duration  # This assumes your function accepts it
-            )
-            self.assertIsInstance(segments, list)
+        segments, overlaps = diarization.diarize_audio(self.sample_wav, num_speakers=2)
+        self.assertIsInstance(segments, list)
+        self.assertIsInstance(overlaps, list)
 
 if __name__ == '__main__':
     unittest.main()

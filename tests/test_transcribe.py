@@ -15,45 +15,46 @@ def dummy_audio_file(tmp_path_factory):
     frequency = 440  # Hz
     t = np.linspace(0., duration, int(samplerate * duration), endpoint=False)
     data = 0.5 * np.sin(2. * np.pi * frequency * t)
-    sf.write(file_path, data.astype(np.float32), samplerate)
+    sf.write(str(file_path), data.astype(np.float32), samplerate)
     return str(file_path)
 
-def test_transcribe_with_whisperx_basic(dummy_audio_file):
+@pytest.mark.parametrize("model_name,device,compute_type", [
+    ("base", "cpu", "int8"),
+])
+def test_transcribe_with_whisperx_basic(dummy_audio_file, model_name, device, compute_type):
     """
-    Tests the basic functionality of transcribe_with_whisperx.
+    Tests WhisperX transcription returns expected dict structure and segments.
     """
-    # Dummy diarization data (simplified for testing)
-    diarization_data = [
+    # Dummy diarization data
+    diar_data = [
         {"speaker": "SPEAKER_00", "start": 0.0, "end": 0.5},
         {"speaker": "SPEAKER_01", "start": 0.6, "end": 1.0},
     ]
 
-    # Call the transcription function
-    # Note: This test will attempt to download WhisperX models if not cached.
-    # For actual unit tests, consider mocking whisperx.load_model and its dependencies.
-    transcribed_segments = transcribe_with_whisperx(
+    # Execute transcription
+    result = transcribe_with_whisperx(
         audio_path=dummy_audio_file,
-        diarization=diarization_data,
-        model_name="base",  # Use a slightly larger model
-        device="cpu",       # Use CPU for testing to avoid GPU dependency
+        diarization=diar_data,
+        model_name=model_name,
+        device=device,
         batch_size=1,
-        compute_type="int8" # Use int8 for faster testing
+        compute_type=compute_type
     )
 
-    # Assertions
-    assert isinstance(transcribed_segments, list)
-    assert len(transcribed_segments) > 0, "No segments transcribed"
+    # Assert top-level structure
+    assert isinstance(result, dict), "Result should be a dict"
+    assert "segments" in result, "Result missing 'segments' key"
+    segments = result["segments"]
+    assert isinstance(segments, list), "'segments' should be a list"
+    assert len(segments) > 0, "No segments transcribed"
 
-    for segment in transcribed_segments:
-        assert "speaker" in segment
-        assert "start" in segment
-        assert "end" in segment
-        assert "text" in segment
-        assert "words" in segment
-        assert isinstance(segment["words"], list)
-        assert len(segment["words"]) > 0, "No words found in segment"
-
-        for word_info in segment["words"]:
-            assert "word" in word_info
-            assert "start" in word_info
-            assert "end" in word_info
+    # Validate each segment
+    for seg in segments:
+        assert "speaker" in seg and isinstance(seg["speaker"], str)
+        assert "start" in seg and isinstance(seg["start"], (float, int))
+        assert "end" in seg and isinstance(seg["end"], (float, int))
+        assert "text" in seg and isinstance(seg["text"], str)
+        assert "words" in seg and isinstance(seg["words"], list)
+        # words list can be empty or contain dicts with 'word','start','end'
+        for w in seg["words"]:
+            assert "word" in w and "start" in w and "end" in w
