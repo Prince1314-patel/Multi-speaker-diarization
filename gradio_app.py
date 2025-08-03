@@ -134,9 +134,10 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
     
     transcript_output = gr.Textbox(
         label="Diarized Transcript", 
-        lines=15, 
-        interactive=True,
-        placeholder="Transcript will appear here..."
+        lines=20, 
+        interactive=False,
+        placeholder="Transcript will appear here...",
+        show_copy_button=True
     )
 
     download_output = gr.File(label="Download Transcript", visible=False)
